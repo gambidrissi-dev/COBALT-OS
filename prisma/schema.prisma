@@ -1,0 +1,164 @@
+// Ce fichier est le cœur de votre application.
+// Il définit la structure de votre base de données PostgreSQL.
+
+generator client {
+provider = "prisma-client-js"
+}
+
+datasource db {
+provider = "postgresql"
+url      = env("DATABASE_URL")
+}
+
+// --- ÉNUMÉRATIONS ---
+
+enum Role {
+SUPER_ADMIN      // Le bureau du collectif (vision globale)
+TENANT_MANAGER   // L'architecte gérant sa micro-entreprise
+ARCHITECT        // Un collaborateur au sein d'une agence
+CLIENT           // Le client qui accède au portail
+}
+
+enum ProjectScope {
+PRIVATE          // Projet propre à une micro-entreprise
+COLLECTIVE       // Projet média/com du collectif
+}
+
+enum InvoiceStatus {
+DRAFT            // Brouillon
+SENT             // Envoyée (Factur-X généré)
+PAID             // Payée
+CANCELLED        // Annulée
+}
+
+// --- MODÈLES ---
+
+model Tenant {
+id          String    @id @default(uuid())
+name        String    // Nom de la micro-entreprise ou du collectif
+siren       String    @unique
+address     String?
+logoUrl     String?   // Stocké sur MinIO
+
+// Relations
+users       User[]
+projects    Project[]
+clients     Client[]
+invoices    Invoice[]
+materials   Material[]
+
+createdAt   DateTime  @default(now())
+updatedAt   DateTime  @updatedAt
+}
+
+model User {
+id            String    @id @default(uuid())
+email         String    @unique
+password      String    // Mot de passe hashé
+name          String?
+role          Role      @default(ARCHITECT)
+
+// Isolation (Multi-tenancy)
+tenantId      String
+tenant        Tenant    @relation(fields: [tenantId], references: [id])
+
+// Relations
+projects      Project[] @relation("ProjectMembers")
+bookings      Booking[]
+
+createdAt     DateTime  @default(now())
+}
+
+model Client {
+id          String    @id @default(uuid())
+name        String    // Nom du client (Particulier ou Entreprise)
+email       String    @unique
+
+// Lien avec la micro-entreprise propriétaire
+tenantId    String
+tenant      Tenant    @relation(fields: [tenantId], references: [id])
+
+projects    Project[]
+invoices    Invoice[]
+
+createdAt   DateTime  @default(now())
+}
+
+model Project {
+id            String       @id @default(uuid())
+title         String
+description   String?
+scope         ProjectScope @default(PRIVATE)
+progress      Int          @default(0) // Pour la barre de progression client (0-100)
+
+// Relations d'appartenance
+tenantId      String?      // Peut être nul pour un projet 100% collectif
+tenant        Tenant?      @relation(fields: [tenantId], references: [id])
+
+clientId      String?
+client        Client?      @relation(fields: [clientId], references: [id])
+
+members       User[]       @relation("ProjectMembers")
+documents     Document[]
+
+createdAt     DateTime     @default(now())
+updatedAt     DateTime     @updatedAt
+}
+
+model Invoice {
+id              String        @id @default(uuid())
+number          String        @unique // Format ARCHI-2026-001
+amountHT        Float
+amountTVA       Float
+status          InvoiceStatus @default(DRAFT)
+
+// Factur-X & Données Électroniques
+xmlData         String?       // Données XML structurées
+pdfUrl          String?       // URL du PDF/A-3 sur MinIO
+
+// Relations
+tenantId        String
+tenant          Tenant        @relation(fields: [tenantId], references: [id])
+
+clientId        String
+client          Client        @relation(fields: [clientId], references: [id])
+
+createdAt       DateTime      @default(now())
+dueDate         DateTime
+}
+
+model Document {
+id              String   @id @default(uuid())
+name            String
+url             String   // Lien vers le stockage S3/MinIO
+type            String   // PDF, DWG, JPG, etc.
+isClientVisible Boolean  @default(false)
+
+projectId       String
+project         Project  @relation(fields: [projectId], references: [id])
+
+createdAt       DateTime @default(now())
+}
+
+model Material {
+id          String    @id @default(uuid())
+name        String
+category    String    // ex: "Laser", "Traceur", "Appareil Photo"
+
+tenantId    String    // Agence propriétaire du matériel
+tenant      Tenant    @relation(fields: [tenantId], references: [id])
+
+bookings    Booking[]
+}
+
+model Booking {
+id          String   @id @default(uuid())
+startDate   DateTime
+endDate     DateTime
+
+materialId  String
+material    Material @relation(fields: [materialId], references: [id])
+
+userId      String
+user        User     @relation(fields: [userId], references: [id])
+}
