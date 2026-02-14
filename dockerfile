@@ -20,6 +20,12 @@ COPY . .
 # On désactive la télémétrie Next.js pour le build
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npx prisma generate
+
+# On récupère la variable depuis Coolify
+ARG DATABASE_URL
+# On l'injecte dans l'environnement du conteneur de build
+ENV DATABASE_URL=$DATABASE_URL
+
 RUN npm run build
 
 # Étape 2 : Exécution
