@@ -1,13 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* Vos autres options ici */
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  experimental: {
+  /* On désactive le compiler expérimental pour l'instant */
+  /* experimental: {
     reactCompiler: true,
-  },
+  }, */
+  
+  // Optionnel : ignore ESLint si tu as encore des erreurs de modules non trouvés
+  eslint: {
+    ignoreDuringBuilds: true, 
+  }
 };
 
 export default nextConfig;
